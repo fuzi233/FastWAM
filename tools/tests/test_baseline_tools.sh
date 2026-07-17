@@ -119,6 +119,10 @@ printf '%s\n' '[train] epoch=0 step=10/20 lr=1.00e-04' >"$LOG"
 expect_fail "missing loss at expected step" \
     "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" fresh
 
+printf '%s\n' '[train]' 'epoch=0' 'step=10/20' 'loss=0.1250' >"$LOG"
+expect_fail "split-line loss evidence" \
+    "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" fresh
+
 printf '%s\n' '[train] epoch=0 step=10/20 loss=NaN' >"$LOG"
 expect_fail "NaN loss" \
     "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" fresh

@@ -9,7 +9,8 @@ from typing import NoReturn
 
 
 LOSS_RE = re.compile(
-    r"\[train\]\s+epoch=\d+\s+step=(\d+)/(\d+)\s+loss=([^\s]+)"
+    r"\[train\][ \t]+epoch=\d+[ \t]+step=(\d+)/(\d+)[ \t]+"
+    r"loss=([^ \t\r\n]+)"
 )
 RESUME_EVIDENCE = (
     "Resuming full training state from directory",
