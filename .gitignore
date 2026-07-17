@@ -238,6 +238,20 @@ manifest.json
 !data/fastwam_model_hf_release/libero_uncond_2cam224.pt
 !data/fastwam_model_hf_release/robotwin_uncond_3cam_384.pt
 
+# Track only the baseline's explicit read-only asset links.
+!data/libero_mujoco3.3.2/
+data/libero_mujoco3.3.2/*
+!data/libero_mujoco3.3.2/libero_spatial_no_noops_lerobot
+!data/libero_mujoco3.3.2/libero_object_no_noops_lerobot
+!data/libero_mujoco3.3.2/libero_goal_no_noops_lerobot
+!data/libero_mujoco3.3.2/libero_10_no_noops_lerobot
+!data/text_embeds_cache/
+data/text_embeds_cache/*
+!data/text_embeds_cache/libero
+!checkpoints/
+checkpoints/*
+!checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt
+
 # OneLogger
 wandb/
 onelogger.err
