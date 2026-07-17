@@ -45,8 +45,17 @@ if [[ "$CHECK_GPU" == 1 ]]; then
         --query-gpu=memory.used,gpu_recovery_action \
         --format=csv,noheader,nounits) || fail "nvidia-smi health query failed for GPU 4"
 
+    [[ -n "$gpu_status" ]] || fail "nvidia-smi returned empty output for GPU 4"
+    if [[ "$gpu_status" == *$'\n'* || "$gpu_status" == *$'\r'* ]]; then
+        fail "nvidia-smi must return exactly one line for GPU 4"
+    fi
+    if [[ "$gpu_status" != *,* || "${gpu_status#*,}" == *,* ]]; then
+        fail "nvidia-smi must return exactly two fields for GPU 4"
+    fi
+
     IFS=, read -r memory_used recovery_action <<<"$gpu_status"
-    memory_used=${memory_used//[[:space:]]/}
+    memory_used=${memory_used#"${memory_used%%[![:space:]]*}"}
+    memory_used=${memory_used%"${memory_used##*[![:space:]]}"}
     recovery_action=${recovery_action#"${recovery_action%%[![:space:]]*}"}
     recovery_action=${recovery_action%"${recovery_action##*[![:space:]]}"}
 

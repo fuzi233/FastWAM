@@ -5,6 +5,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 PYTHON=${PYTHON:-/export/code/sunxiaoquan/fastwam-baseline/env/bin/python}
 VERIFY_INFERENCE="$ROOT/tools/verify_inference.py"
 VERIFY_TRAINING_STATE="$ROOT/tools/verify_training_state.py"
+CHECK_ASSETS="$ROOT/tools/check_assets.sh"
 
 for validator in "$VERIFY_INFERENCE" "$VERIFY_TRAINING_STATE"; do
     if [[ ! -f "$validator" ]]; then
@@ -152,5 +153,78 @@ for evidence in resume dataloader accelerate; do
     expect_fail "resumed state missing $evidence evidence" \
         "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" resumed
 done
+
+FAKE_BIN="$TMP_DIR/fake-bin"
+FAKE_PYTHON="$TMP_DIR/fake-python"
+GPU_CALLS="$TMP_DIR/nvidia-smi.calls"
+TORCH_CALLS="$TMP_DIR/torch-imported"
+mkdir -p "$FAKE_BIN" "$FAKE_PYTHON"
+cat >"$FAKE_BIN/nvidia-smi" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"${FAKE_NVIDIA_LOG:?}"
+printf '%s' "${FAKE_NVIDIA_OUTPUT-}"
+EOF
+chmod +x "$FAKE_BIN/nvidia-smi"
+cat >"$FAKE_PYTHON/torch.py" <<'EOF'
+import os
+from pathlib import Path
+
+Path(os.environ["FAKE_TORCH_LOG"]).write_text("imported\n", encoding="utf-8")
+
+
+class _Cuda:
+    @staticmethod
+    def device_count():
+        return 1
+
+
+cuda = _Cuda()
+EOF
+
+fake_gpu_env() {
+    env \
+        PATH="$FAKE_BIN:$PATH" \
+        PYTHONPATH="$FAKE_PYTHON" \
+        FAKE_NVIDIA_LOG="$GPU_CALLS" \
+        FAKE_NVIDIA_OUTPUT="$1" \
+        FAKE_TORCH_LOG="$TORCH_CALLS" \
+        "${@:2}"
+}
+
+check_gpu_disabled() {
+    rm -f "$GPU_CALLS" "$TORCH_CALLS"
+    fake_gpu_env $'0, None\n' env CHECK_GPU=0 bash "$CHECK_ASSETS"
+    [[ ! -e "$GPU_CALLS" && ! -e "$TORCH_CALLS" ]]
+}
+
+check_default_gpu_query() {
+    local expected_args='-i 4 --query-gpu=memory.used,gpu_recovery_action --format=csv,noheader,nounits'
+    rm -f "$GPU_CALLS" "$TORCH_CALLS"
+    fake_gpu_env $'0, None\n' env -u CHECK_GPU bash "$CHECK_ASSETS"
+    [[ "$(<"$GPU_CALLS")" == "$expected_args" && -e "$TORCH_CALLS" ]]
+}
+
+expect_safe_gpu_failure() {
+    local name=$1 output=$2
+    TESTS=$((TESTS + 1))
+    rm -f "$GPU_CALLS" "$TORCH_CALLS"
+    if fake_gpu_env "$output" env CHECK_GPU=1 bash "$CHECK_ASSETS" >/dev/null 2>&1; then
+        printf 'FAIL: expected GPU preflight failure: %s\n' "$name" >&2
+        return 1
+    fi
+    if [[ -e "$TORCH_CALLS" ]]; then
+        printf 'FAIL: GPU preflight reached CUDA import: %s\n' "$name" >&2
+        return 1
+    fi
+}
+
+expect_pass "CHECK_GPU=0 skips nvidia-smi and CUDA import" check_gpu_disabled
+expect_pass "default GPU query uses only the required arguments" check_default_gpu_query
+expect_safe_gpu_failure "busy GPU" $'1025, None\n'
+expect_safe_gpu_failure "GPU recovery action" $'0, Reset\n'
+expect_safe_gpu_failure "missing GPU output comma" $'0 None\n'
+expect_safe_gpu_failure "empty GPU output" ''
+expect_safe_gpu_failure "non-numeric GPU memory" $'unknown, None\n'
+expect_safe_gpu_failure "multiple GPU output lines" $'0, None\n0, None\n'
 
 printf 'PASS: %d baseline tool checks\n' "$TESTS"
