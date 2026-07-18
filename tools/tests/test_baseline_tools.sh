@@ -38,6 +38,15 @@ expect_fail() {
     fi
 }
 
+check_asset_root_config() {
+    # shellcheck source=../env.sh
+    source "$ROOT/tools/env.sh"
+    [[ "$FASTWAM_ASSET_ROOT" == /data/datasets/sunxiaoquan/FastWAM ]]
+    [[ "$DIFFSYNTH_MODEL_BASE_PATH" == "$FASTWAM_ASSET_ROOT/models/Wan2.2-TI2V-5B" ]]
+}
+
+expect_pass "asset root uses the private FastWAM namespace" check_asset_root_config
+
 write_result() {
     local output=$1 suite=$2 task_id=$3 trials=$4 successes=$5
     mkdir -p "$output/$suite"

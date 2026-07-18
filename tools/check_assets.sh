@@ -22,18 +22,18 @@ require_dir() {
 PYTHON="$FASTWAM_ENV/bin/python"
 [[ -x "$PYTHON" ]] || fail "target environment Python is missing or not executable: $PYTHON"
 
-require_dir /data/models/Wan2.2-TI2V-5B
-require_file /data/models/Motus_FastWAM/pretrain_model/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt
-require_file /data/models/fastwam/libero_uncond_2cam224.pt
-require_file /data/models/fastwam/libero_uncond_2cam224_dataset_stats.json
-require_dir /data/datasets/fastwam/text_embeds_cache/libero
+require_dir "$DIFFSYNTH_MODEL_BASE_PATH"
+require_file "$FASTWAM_ASSET_ROOT/checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt"
+require_file "$FASTWAM_ASSET_ROOT/checkpoints/libero_uncond_2cam224.pt"
+require_file "$FASTWAM_ASSET_ROOT/checkpoints/libero_uncond_2cam224_dataset_stats.json"
+require_dir "$FASTWAM_ASSET_ROOT/text_embeds_cache/libero"
 
 for dataset in \
     libero_spatial_no_noops_lerobot \
     libero_object_no_noops_lerobot \
     libero_goal_no_noops_lerobot \
     libero_10_no_noops_lerobot; do
-    require_dir "/data/datasets/fastwam/$dataset"
+    require_dir "$FASTWAM_ASSET_ROOT/datasets/$dataset"
 done
 
 "$PYTHON" -m pip check
