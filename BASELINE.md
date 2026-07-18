@@ -9,10 +9,11 @@
 - 代码：`/export/code/sunxiaoquan/fastwam-baseline/repo`
 - Conda 前缀：`/export/code/sunxiaoquan/fastwam-baseline/env`
 - 资产根：`/data/datasets/sunxiaoquan/FastWAM`
+- 运行时缓存：`/data/datasets/sunxiaoquan/FastWAM/runtime_cache`
 - 运行产物：`/export/code/sunxiaoquan/fastwam-baseline/artifacts`
 - 安装与迁移证据：`/export/code/sunxiaoquan/fastwam-baseline/setup-logs`
 
-进程固定设置 `CUDA_VISIBLE_DEVICES=4`，因此物理 GPU 4 在 FastWAM 进程内显示为逻辑 GPU 0。不得改用 GPU 0–3 或 GPU 5–7，也不得通过 `ALLOW_BUSY_GPU=1` 抢占已使用的 GPU 4。
+通过 `FASTWAM_GPU_LIST` 显式选择物理 GPU，进程内会按该列表重新编号为逻辑 GPU。当前验收使用物理 GPU 0 做推理、物理 GPU 1–2 做双卡训练，GPU 3 留作备用；不得使用 recovery action 非 `None` 的 GPU，也不得通过 `ALLOW_BUSY_GPU=1` 抢占忙卡。
 
 ## 资产布局
 
@@ -28,7 +29,11 @@
 │   ├── libero_object_no_noops_lerobot/
 │   ├── libero_goal_no_noops_lerobot/
 │   └── libero_10_no_noops_lerobot/
-└── text_embeds_cache/libero/
+├── text_embeds_cache/libero/
+└── runtime_cache/
+    ├── home/.cache/libero/assets/
+    ├── huggingface/
+    └── xdg/
 ```
 
 这些资产由原路径复制后经过路径/类型清单、逐文件 checksum 和大文件 SHA-256 校验。旧源当前保留，不得从本基线删除或修改。repo 内使用绝对符号链接；“只读复用”是本基线的行为约束，不是操作系统级只读挂载，因此每次重要运行后仍需核对共享资产未被修改。
@@ -42,7 +47,7 @@ bash tools/tests/test_smoke_scripts.sh
 bash tools/check_assets.sh
 ```
 
-`tools/check_assets.sh` 会检查全部资产、独立环境的依赖一致性以及物理 GPU 4。GPU recovery action 非 `None`、输出格式异常或显存占用超过 1024MiB时都会安全失败。
+`tools/check_assets.sh` 会检查全部资产、独立环境的依赖一致性以及 `FASTWAM_GPU_LIST` 中的每张物理 GPU。GPU recovery action 非 `None`、输出格式异常或显存占用超过 1024MiB 时都会安全失败。Hugging Face、XDG 和 LIBERO 的运行时缓存均由 `tools/env.sh` 限定在资产根下；LIBERO 的非交互路径配置位于 `config/libero/config.yaml`。
 
 仅检查环境和资产、不查询或导入 GPU：
 
@@ -53,7 +58,7 @@ CHECK_GPU=0 bash tools/check_assets.sh
 ## 单任务 LIBERO 推理
 
 ```bash
-bash tools/smoke_infer.sh
+FASTWAM_GPU_LIST=0 bash tools/smoke_infer.sh
 ```
 
 入口直接调用官方 `experiments/libero/eval_libero_single.py`，任务固定为 `libero_goal` task 7，运行一次 trial。最新通过机器校验的产物路径记录在：
@@ -67,7 +72,7 @@ bash tools/smoke_infer.sh
 ## 训练 step 1 与恢复到 step 2
 
 ```bash
-bash tools/smoke_train_resume.sh
+FASTWAM_GPU_LIST=1,2 bash tools/smoke_train_resume.sh
 ```
 
 脚本按顺序启动两个独立 Accelerate 进程：
@@ -87,6 +92,7 @@ bash tools/smoke_train_resume.sh
 
 - 不修改 `/export/ra/sunxiaoquan/FastWAM` 或其现有工作区。
 - 不向 `/export/ra/sunxiaoquan` 或本机写入模型、checkpoint 或数据集。
+- 不让 Hugging Face、LIBERO、XDG 等运行时缓存回退到 `/export/ra/sunxiaoquan`；统一使用资产根下的 `runtime_cache`。
 - 不删除旧资产，不改共享资产权限，不停止其他用户的 GPU 进程。
 - 不修改 shell 启动文件来激活环境；始终使用独立前缀的绝对解释器路径。
 - 不把实验提交推到官方 `origin`；代码推送到 `fork` remote。

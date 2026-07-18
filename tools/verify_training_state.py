@@ -9,9 +9,11 @@ from typing import NoReturn
 
 
 LOSS_RE = re.compile(
-    r"\[train\][ \t]+epoch=\d+[ \t]+step=(\d+)/(\d+)[ \t]+"
-    r"loss=([^ \t\r\n]+)"
+    r"^(?:\[train\]|[^\r\n]*?[ \t]\|[ \t]+>>)[ \t]+"
+    r"epoch=\d+[ \t]+step=(\d+)/(\d+)[ \t]+loss=([^ \t\r\n]+)",
+    re.MULTILINE,
 )
+RICH_SOURCE_RE = re.compile(r"[ \t]+\S+\.py:\d+[ \t]*$", re.MULTILINE)
 RESUME_EVIDENCE = (
     "Resuming full training state from directory",
     "Restored dataloader progress",
@@ -113,7 +115,10 @@ def main() -> None:
         fail(f"no finite training loss found for expected step {step}")
 
     if args.mode == "resumed":
-        missing_evidence = [text for text in RESUME_EVIDENCE if text not in log_text]
+        normalized_log_text = " ".join(RICH_SOURCE_RE.sub("", log_text).split())
+        missing_evidence = [
+            text for text in RESUME_EVIDENCE if text not in normalized_log_text
+        ]
         if missing_evidence:
             fail(
                 "resumed log is missing recovery evidence: "

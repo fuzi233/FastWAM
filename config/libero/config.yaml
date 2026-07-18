@@ -1,0 +1,5 @@
+assets: /data/datasets/sunxiaoquan/FastWAM/runtime_cache/home/.cache/libero/assets
+bddl_files: /export/code/sunxiaoquan/fastwam-baseline/env/lib/python3.10/site-packages/libero/libero/bddl_files
+benchmark_root: /export/code/sunxiaoquan/fastwam-baseline/env/lib/python3.10/site-packages/libero/libero
+datasets: /data/datasets/sunxiaoquan/FastWAM/datasets
+init_states: /export/code/sunxiaoquan/fastwam-baseline/env/lib/python3.10/site-packages/libero/libero/init_files

@@ -47,6 +47,55 @@ check_asset_root_config() {
 
 expect_pass "asset root uses the private FastWAM namespace" check_asset_root_config
 
+check_runtime_cache_config() (
+    # shellcheck source=../env.sh
+    source "$ROOT/tools/env.sh"
+    [[ "$FASTWAM_RUNTIME_ROOT" == "$FASTWAM_ASSET_ROOT/runtime_cache" ]]
+    [[ "$HOME" == "$FASTWAM_RUNTIME_ROOT/home" ]]
+    [[ "$HF_HOME" == "$FASTWAM_RUNTIME_ROOT/huggingface" ]]
+    [[ "$HF_DATASETS_CACHE" == "$HF_HOME/datasets" ]]
+    [[ "$HF_HUB_CACHE" == "$HF_HOME/hub" ]]
+    [[ "$XDG_CACHE_HOME" == "$FASTWAM_RUNTIME_ROOT/xdg" ]]
+    [[ "$LIBERO_CONFIG_PATH" == "$FASTWAM_REPO/config/libero" ]]
+    for cache_path in \
+        "$HOME" \
+        "$HF_HOME" \
+        "$HF_DATASETS_CACHE" \
+        "$HF_HUB_CACHE" \
+        "$XDG_CACHE_HOME"; do
+        [[ "$cache_path" == "$FASTWAM_RUNTIME_ROOT"/* ]]
+        [[ "$cache_path" != /export/ra/sunxiaoquan/* ]]
+    done
+)
+
+expect_pass "runtime caches stay under the private asset root" check_runtime_cache_config
+
+check_libero_noninteractive_config() (
+    # shellcheck source=../env.sh
+    source "$ROOT/tools/env.sh"
+    [[ -s "$LIBERO_CONFIG_PATH/config.yaml" ]]
+    "$PYTHON" - <<'PY'
+import os
+
+from libero.libero import get_assets_path, get_libero_path
+
+asset_root = os.environ["FASTWAM_ASSET_ROOT"]
+runtime_root = os.environ["FASTWAM_RUNTIME_ROOT"]
+repo = os.environ["FASTWAM_REPO"]
+assert os.environ["LIBERO_CONFIG_PATH"] == os.path.join(repo, "config", "libero")
+assert get_libero_path("datasets") == os.path.join(asset_root, "datasets")
+assert get_libero_path("assets") == os.path.join(
+    runtime_root, "home", ".cache", "libero", "assets"
+)
+assert get_assets_path() == get_libero_path("assets")
+for key in ("benchmark_root", "bddl_files", "init_states"):
+    path = get_libero_path(key)
+    assert path.startswith(os.environ["FASTWAM_ENV"] + os.sep), (key, path)
+PY
+)
+
+expect_pass "LIBERO imports non-interactively with isolated paths" check_libero_noninteractive_config
+
 check_multi_gpu_config() (
     FASTWAM_GPU_LIST=1,2
     # shellcheck source=../env.sh
@@ -115,6 +164,12 @@ printf '%s\n' '[train] epoch=0 step=10/20 loss=0.1250 lr=1.00e-04' >"$LOG"
 expect_pass "valid fresh training state" \
     "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" fresh
 
+printf '%s\n' \
+    '07/18 [15:07:53] INFO     | >>  epoch=0 step=10/20 loss=0.1250 trainer.py:715' \
+    >"$LOG"
+expect_pass "official Rich training loss line" \
+    "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" fresh
+
 printf '%s\n' '{"global_step":9,"epoch":0,"batch_in_epoch":0}' \
     >"$STATE_DIR/trainer_state.json"
 expect_fail "mismatched training global step" \
@@ -172,6 +227,16 @@ printf '%s\n' \
     'Restored dataloader progress: epoch=0 batch_in_epoch=0 sample_offset=0' \
     '[train] epoch=0 step=10/20 loss=0.1250' >"$LOG"
 expect_pass "complete official resume branch evidence" \
+    "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" resumed
+
+printf '%s\n' \
+    '07/18 [15:15:20] INFO | >> Resuming full training state from trainer.py:271' \
+    '                          directory: /tmp/state' \
+    'INFO | >> Restored dataloader progress: trainer.py:614' \
+    '                          epoch=0 batch_in_epoch=1' \
+    '07/18 [15:16:26] INFO | >> epoch=0 step=10/20 loss=0.1250 trainer.py:715' \
+    >"$LOG"
+expect_pass "wrapped official Rich resume evidence" \
     "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" resumed
 
 for evidence in resume dataloader; do
