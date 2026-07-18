@@ -47,6 +47,16 @@ check_asset_root_config() {
 
 expect_pass "asset root uses the private FastWAM namespace" check_asset_root_config
 
+check_multi_gpu_config() (
+    FASTWAM_GPU_LIST=1,2
+    # shellcheck source=../env.sh
+    source "$ROOT/tools/env.sh"
+    [[ "$FASTWAM_GPU_LIST" == 1,2 ]]
+    [[ "$CUDA_VISIBLE_DEVICES" == 1,2 ]]
+)
+
+expect_pass "explicit physical GPU list controls CUDA visibility" check_multi_gpu_config
+
 write_result() {
     local output=$1 suite=$2 task_id=$3 trials=$4 successes=$5
     mkdir -p "$output/$suite"
@@ -191,7 +201,7 @@ Path(os.environ["FAKE_TORCH_LOG"]).write_text("imported\n", encoding="utf-8")
 class _Cuda:
     @staticmethod
     def device_count():
-        return 1
+        return int(os.environ.get("FAKE_TORCH_DEVICE_COUNT", "1"))
 
 
 cuda = _Cuda()
@@ -220,6 +230,22 @@ check_default_gpu_query() {
     [[ "$(<"$GPU_CALLS")" == "$expected_args" && -e "$TORCH_CALLS" ]]
 }
 
+check_multi_gpu_query() {
+    local expected_first='-i 1 --query-gpu=memory.used,gpu_recovery_action --format=csv,noheader,nounits'
+    local expected_second='-i 2 --query-gpu=memory.used,gpu_recovery_action --format=csv,noheader,nounits'
+    rm -f "$GPU_CALLS" "$TORCH_CALLS"
+    fake_gpu_env $'0, None\n' env \
+        FASTWAM_GPU_LIST=1,2 \
+        FAKE_TORCH_DEVICE_COUNT=2 \
+        CHECK_GPU=1 \
+        bash "$CHECK_ASSETS"
+    mapfile -t calls <"$GPU_CALLS"
+    [[ ${#calls[@]} -eq 2 ]]
+    [[ "${calls[0]}" == "$expected_first" ]]
+    [[ "${calls[1]}" == "$expected_second" ]]
+    [[ -e "$TORCH_CALLS" ]]
+}
+
 expect_safe_gpu_failure() {
     local name=$1 output=$2
     TESTS=$((TESTS + 1))
@@ -236,6 +262,11 @@ expect_safe_gpu_failure() {
 
 expect_pass "CHECK_GPU=0 skips nvidia-smi and CUDA import" check_gpu_disabled
 expect_pass "default GPU query uses only the required arguments" check_default_gpu_query
+expect_pass "multi-GPU query checks each selected physical GPU" check_multi_gpu_query
+expect_fail "unsafe recovery GPU is rejected from selection" \
+    fake_gpu_env $'0, None\n' env FASTWAM_GPU_LIST=5 CHECK_GPU=1 bash "$CHECK_ASSETS"
+expect_fail "duplicate physical GPU selection is rejected" \
+    fake_gpu_env $'0, None\n' env FASTWAM_GPU_LIST=1,1 CHECK_GPU=1 bash "$CHECK_ASSETS"
 expect_safe_gpu_failure "busy GPU" $'1025, None\n'
 expect_safe_gpu_failure "GPU recovery action" $'0, Reset\n'
 expect_safe_gpu_failure "missing GPU output comma" $'0 None\n'

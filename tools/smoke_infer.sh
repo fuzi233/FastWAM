@@ -8,6 +8,12 @@ source "$TOOLS_DIR/env.sh"
 cd "$FASTWAM_REPO"
 bash "$TOOLS_DIR/check_assets.sh"
 
+IFS=, read -r -a inference_gpu_ids <<<"$FASTWAM_GPU_LIST"
+if [[ ${#inference_gpu_ids[@]} -ne 1 ]]; then
+    printf 'ERROR: inference smoke run requires exactly one physical GPU, got %s\n' "$FASTWAM_GPU_LIST" >&2
+    exit 1
+fi
+
 artifacts_root=${FASTWAM_ARTIFACTS_OVERRIDE:-$FASTWAM_ARTIFACTS}
 eval_python=${FASTWAM_EVAL_PYTHON:-$FASTWAM_ENV/bin/python}
 run_id=$(date -u +%Y%m%dT%H%M%S-%N)

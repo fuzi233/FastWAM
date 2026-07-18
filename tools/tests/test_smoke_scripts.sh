@@ -22,7 +22,7 @@ mkdir -p "$FAKE_BIN" "$ARTIFACTS"
 cat >"$FAKE_BIN/eval-python" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'eval %s\n' "$*" >>"${FAKE_CALLS:?}"
+printf 'eval cuda=%s %s\n' "${CUDA_VISIBLE_DEVICES:?}" "$*" >>"${FAKE_CALLS:?}"
 output=
 for arg in "$@"; do
     case "$arg" in
@@ -38,7 +38,7 @@ EOF
 cat >"$FAKE_BIN/accelerate" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'train %s\n' "$*" >>"${FAKE_CALLS:?}"
+printf 'train cuda=%s %s\n' "${CUDA_VISIBLE_DEVICES:?}" "$*" >>"${FAKE_CALLS:?}"
 output=
 max_steps=
 resume=
@@ -68,6 +68,7 @@ EOF
 chmod +x "$FAKE_BIN/eval-python" "$FAKE_BIN/accelerate"
 
 CHECK_GPU=0 \
+FASTWAM_GPU_LIST=0 \
 FASTWAM_ARTIFACTS_OVERRIDE="$ARTIFACTS" \
 FASTWAM_EVAL_PYTHON="$FAKE_BIN/eval-python" \
 FAKE_CALLS="$CALLS" \
@@ -76,10 +77,12 @@ bash "$INFER_SCRIPT"
 inference_output=$(<"$ARTIFACTS/latest-inference.txt")
 [[ -s "$inference_output/verification.json" ]]
 grep -Fq 'experiments/libero/eval_libero_single.py' "$CALLS"
+grep -Fq 'eval cuda=0 ' "$CALLS"
 grep -Fq 'ckpt=/data/datasets/sunxiaoquan/FastWAM/checkpoints/libero_uncond_2cam224.pt' "$CALLS"
 grep -Fq 'EVALUATION.dataset_stats_path=/data/datasets/sunxiaoquan/FastWAM/checkpoints/libero_uncond_2cam224_dataset_stats.json' "$CALLS"
 
 CHECK_GPU=0 \
+FASTWAM_GPU_LIST=1,2 \
 FASTWAM_ARTIFACTS_OVERRIDE="$ARTIFACTS" \
 FASTWAM_ACCELERATE="$FAKE_BIN/accelerate" \
 FAKE_CALLS="$CALLS" \
@@ -89,6 +92,8 @@ training_output=$(<"$ARTIFACTS/latest-training.txt")
 [[ -s "$training_output/step1/verification.json" ]]
 [[ -s "$training_output/step2/verification.json" ]]
 [[ $(grep -c '^train ' "$CALLS") -eq 2 ]]
+grep -Fq 'train cuda=1,2 ' "$CALLS"
+grep -Fq -- '--num_processes 2' "$CALLS"
 grep -Fq 'save_every=0' "$CALLS"
 grep -Fq '+data.train.pretrained_norm_stats=/data/datasets/sunxiaoquan/FastWAM/checkpoints/libero_uncond_2cam224_dataset_stats.json' "$CALLS"
 grep -Fq "resume=$training_output/step1/checkpoints/state/step_000001" "$CALLS"

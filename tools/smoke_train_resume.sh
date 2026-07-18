@@ -8,6 +8,9 @@ source "$TOOLS_DIR/env.sh"
 cd "$FASTWAM_REPO"
 bash "$TOOLS_DIR/check_assets.sh"
 
+IFS=, read -r -a training_gpu_ids <<<"$FASTWAM_GPU_LIST"
+num_processes=${#training_gpu_ids[@]}
+
 artifacts_root=${FASTWAM_ARTIFACTS_OVERRIDE:-$FASTWAM_ARTIFACTS}
 accelerate_bin=${FASTWAM_ACCELERATE:-$FASTWAM_ENV/bin/accelerate}
 run_id=$(date -u +%Y%m%dT%H%M%S-%N)
@@ -31,7 +34,7 @@ common_overrides=(
 
 "$accelerate_bin" launch \
     --config_file scripts/accelerate_configs/accelerate_zero1_ds.yaml \
-    --num_processes 1 \
+    --num_processes "$num_processes" \
     scripts/train.py \
     "${common_overrides[@]}" \
     output_dir="$step1_output" \
@@ -47,7 +50,7 @@ step1_weights="$step1_output/checkpoints/weights/step_000001.pt"
 
 "$accelerate_bin" launch \
     --config_file scripts/accelerate_configs/accelerate_zero1_ds.yaml \
-    --num_processes 1 \
+    --num_processes "$num_processes" \
     scripts/train.py \
     "${common_overrides[@]}" \
     output_dir="$step2_output" \
