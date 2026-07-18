@@ -157,7 +157,14 @@ write_resumed_log
 expect_pass "resumed state with all recovery evidence" \
     "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" resumed
 
-for evidence in resume dataloader accelerate; do
+printf '%s\n' \
+    'Resuming full training state from directory: /tmp/state' \
+    'Restored dataloader progress: epoch=0 batch_in_epoch=0 sample_offset=0' \
+    '[train] epoch=0 step=10/20 loss=0.1250' >"$LOG"
+expect_pass "complete official resume branch evidence" \
+    "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" resumed
+
+for evidence in resume dataloader; do
     write_resumed_log "$evidence"
     expect_fail "resumed state missing $evidence evidence" \
         "$PYTHON" "$VERIFY_TRAINING_STATE" "$STATE_DIR" 10 "$LOG" resumed

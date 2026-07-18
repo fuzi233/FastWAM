@@ -15,7 +15,6 @@ LOSS_RE = re.compile(
 RESUME_EVIDENCE = (
     "Resuming full training state from directory",
     "Restored dataloader progress",
-    "Loaded accelerate training state",
 )
 
 
